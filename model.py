@@ -16,7 +16,6 @@ Metrics = collections.namedtuple('Metrics', 'loglikelihood aer perplexity')
 
 
 class Model:
-
     use_q = None
 
     def __init__(self, data: ParallelData, validation_gold_alignments, initialisation_type='uniform'):
@@ -68,9 +67,12 @@ class Model:
 
                     word_counts[english_word][french_word] += delta
 
-                    first_alignment_count_index, second_alignment_count_index = self.get_q_cache_indexes(i, j, len(sentence.english), len(sentence.french))
+                    # indices for alignment_counts different for absolute positions and jump distribution
+                    first_alignment_count_index, second_alignment_count_index = self.get_q_cache_indexes(i, j, len(
+                        sentence.english), len(sentence.french))
                     alignment_counts[first_alignment_count_index][second_alignment_count_index] += delta
 
+        # normalize counts (actually part of m step)
         for english_word in word_counts.keys():
             english_word_count = sum(word_counts[english_word].values())
             for french_word, french_word_count in word_counts[english_word].items():
@@ -87,6 +89,9 @@ class Model:
         raise NotImplementedError
 
     def delta(self, sentence: Sentence, i, j):
+        """
+        delta = (q(i|j,l,m) * t(f_j|e_i)) / (sum_i'=0_to_l q(i'|j,l,m) * t(f_j|e_i'))
+        """
 
         cached_delta_sums = self.delta_sum_cache.get(sentence.id)
         if cached_delta_sums:
@@ -109,6 +114,9 @@ class Model:
                / total
 
     def get_best_alignment(self, sentence: Sentence, show_alignment=False) -> Alignment:
+        """
+        Viterbi
+        """
 
         l_english = len(sentence.english)
         m_french = len(sentence.french)
@@ -168,6 +176,10 @@ class Model:
         return Metrics(data_probability, aer, perplexity)
 
     def write_NAACL_alignments(self, write_to, data_set="train_data"):
+        """
+        Writes alignments in NAACL format and returns perplexity with those alignments
+        perplexity = sum_C -log(p(f|e))
+        """
 
         print("Writing alignments ...")
 
@@ -182,7 +194,8 @@ class Model:
 
                 sentence_likelihood = 0
                 if i % 10000 == 0:
-                    print('{:.0%} of sentences processed for writing alignments'.format(sentence.id / len(current_dataset)))
+                    print('{:.0%} of sentences processed for writing alignments'.format(
+                        sentence.id / len(current_dataset)))
 
                 alignment = self.get_best_alignment(sentence, show_alignment=False)
                 for word_alignment in alignment.word_alignments:
@@ -226,7 +239,8 @@ class Model:
 
         alignment_words = []
         for _, english_index, french_index, probability in alignment.word_alignments:
-            alignment_words.append(sentence.english[english_index] + "- " + str(probability) + " ->" + sentence.french[french_index])
+            alignment_words.append(
+                sentence.english[english_index] + "- " + str(probability) + " ->" + sentence.french[french_index])
 
         return print(" ".join(alignment_words))
 
@@ -258,27 +272,22 @@ class Model:
 
 
 class Model1(Model):
-
     use_q = False
 
     def initial_t(self):
-
         if not self.initialisation_type == 'uniform': raise ValueError('invalid initialisation type for model 1')
 
         french_vocabulary_size = len(self.data.training_vocabulary_french)
         return defaultdict(lambda: defaultdict(lambda: 1 / french_vocabulary_size))
 
     def initial_q(self, initialisation_type):
-
         return {}
 
     def q(self, sentence: Sentence, i, j):
-
         # Values for q cancel out in the posterior -- exact value does not matter
         return 1
 
     def update_q(self, alignment_counts: {}):
-
         # Model 1 does not have q values
         pass
 
@@ -287,7 +296,6 @@ class Model1(Model):
 
 
 class Model2(Model):
-
     use_q = True
 
     def initial_t(self):
@@ -319,7 +327,8 @@ class Model2(Model):
             # Use same random distribution for all english words -- quickly exceeds available memory otherwise
             return defaultdict(lambda: translation_probabilities)
 
-        else: raise ValueError('Undefined initialisation type')
+        else:
+            raise ValueError('Undefined initialisation type')
 
     def initial_q(self, initialisation_type):
 
@@ -333,7 +342,8 @@ class Model2(Model):
             init_q = defaultdict(lambda: defaultdict(lambda: 1 / 100))
             for n_sent, sentence in enumerate(self.data.train_data):
                 if n_sent % 1000 == 0:
-                    print('{:.0%} % of sentences processed for initialization'.format(n_sent / len(self.data.train_data)))
+                    print(
+                        '{:.0%} % of sentences processed for initialization'.format(n_sent / len(self.data.train_data)))
                 for i, english_word in enumerate(sentence.english):
                     for j, french_word in enumerate(sentence.french):
                         init_q[(i, len(sentence.english), len(sentence.french))][j] = 0
@@ -348,12 +358,17 @@ class Model2(Model):
             return init_q
 
         elif initialisation_type == 'ibm1':
+
             # IBM 1 does not have q parameters -- use uniform initial values instead
             return self.initial_q('uniform')
 
-        else: raise ValueError('Undefined initialisation type')
+        else:
+            raise ValueError('Undefined initialisation type')
 
     def q(self, sentence: Sentence, i, j):
+        """
+        q(i|j,m,l)
+        """
 
         l = len(sentence.english)
         m = len(sentence.french)
@@ -370,6 +385,9 @@ class Model2(Model):
         return q_j / q_jprime
 
     def update_q(self, alignment_counts: {}):
+        """
+        normalize and update q parameters
+        """
 
         for alignment in alignment_counts.keys():
             total = sum(alignment_counts[alignment].values())
@@ -432,6 +450,9 @@ class BayesianModel1(Model1):
         self.l_sum_cache = {}
 
     def update_l(self):
+        """
+        normalize and update lambda parameters
+        """
 
         self.l_sum_cache = {}
         for english_word, french_words in self.t.items():
@@ -444,6 +465,9 @@ class BayesianModel1(Model1):
         self.update_l()
 
     def delta(self, sentence: Sentence, i, j):
+        """
+        delta same as in other models except for t(f|e)
+        """
 
         bayesian_t = self.calculate_t(sentence.french[j], sentence.english[i])
 
@@ -463,6 +487,9 @@ class BayesianModel1(Model1):
             return 0
 
     def calculate_t(self, french_word, english_word):
+        """
+        t(f|e) = exp(log(gamma(lambda(f|e)) - log(gamma(sum_f' lambda(f'|e))))
+        """
 
         if english_word in self.l_sum_cache.keys():
             bayesian_t_sum = self.l_sum_cache[english_word]
@@ -477,7 +504,15 @@ class BayesianModel1(Model1):
             return 0.0000000000001
 
     def elbo(self):
+        """
+        elbo = perplexity - kl(q|posterior)
+        let V_e size of English vocabulary
+        -kl(q|posterior) = -V_e * loggamma(alpha) + loggamma(V_e * alpha)
+                                + sum_e sum_f ( t(f|e)*(alpha - lambda(f|e))) - sum_e (lambda(f|e))
 
+        """
+
+        # calculate KL-divergence
         V_e = len(self.data.training_vocabulary_english)
         kl_divergence = 0
         lambda_sum = 0
@@ -489,8 +524,11 @@ class BayesianModel1(Model1):
         kl_divergence -= V_e * loggamma(self.alpha)
         kl_divergence += loggamma(V_e * self.alpha)
         kl_divergence -= loggamma(lambda_sum)
+
+        # get perplexity
         perplexity = self.write_NAACL_alignments(None)
 
+        # convert complex return value from loggamma function to real value
         kl_divergence = kl_divergence.real
 
         return -perplexity + kl_divergence
@@ -508,6 +546,9 @@ class BayesianModel2(Model2):
         self.l_sum_cache = {}
 
     def update_l(self):
+        """
+            normalize and update lambda parameters
+        """
 
         self.l_sum_cache = {}
         for english_word, french_words in self.t.items():
@@ -520,6 +561,9 @@ class BayesianModel2(Model2):
         self.update_l()
 
     def delta(self, sentence: Sentence, i, j):
+        """
+            delta same as in other models except for t(f|e)
+        """
 
         bayesian_t = self.calculate_t(sentence.french[j], sentence.english[i])
 
@@ -539,6 +583,9 @@ class BayesianModel2(Model2):
             return 0
 
     def calculate_t(self, french_word, english_word):
+        """
+            t(f|e) = exp(log(gamma(lambda(f|e)) - log(gamma(sum_f' lambda(f'|e))))
+        """
 
         if english_word in self.l_sum_cache.keys():
             bayesian_t_sum = self.l_sum_cache[english_word]
@@ -553,6 +600,12 @@ class BayesianModel2(Model2):
             return 0.0000000000001
 
     def elbo(self):
+        """
+            elbo = perplexity - kl(q|posterior)
+            let V_e size of English vocabulary
+            -kl(q|posterior) = -V_e * loggamma(alpha) + loggamma(V_e * alpha)
+                                    + sum_e sum_f ( t(f|e)*(alpha - lambda(f|e))) - sum_e (lambda(f|e))
+        """
 
         V_e = len(self.data.training_vocabulary_english)
         kl_divergence = 0

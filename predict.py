@@ -15,33 +15,33 @@ data_pickle = 'pickles/data-t5.pickle'
 with open(data_pickle, 'rb') as file:
     data = pickle.load(file)
 
-# model = Model1(data, None)
-# model.load_parameters('parameters')
-# write_alignments(model, 'ibm1.mle.naacl')
-# #
-# model = BayesianModel1(data, None, 0.1)
-# model.load_parameters('parameters')
-# write_alignments(model, 'ibm1.vb.naacl')
+model = Model1(data, None)
+model.load_parameters('parameters')
+write_alignments(model, 'ibm1.mle.naacl')
 #
-# model = Model2(data, None, 'uniform')
-# model.load_parameters('parameters')
-# write_alignments(model, 'ibm2-uniform.mle.naacl')
-#
-# model = Model2(data, None, 'random')
-# model.load_parameters('parameters')
-# write_alignments(model, 'ibm2-random.mle.naacl')
-#
-# model = Model2(data, None, 'ibm1')
-# model.load_parameters('parameters')
-# write_alignments(model, 'ibm2-ibm1.mle.naacl')
+model = BayesianModel1(data, None, 0.1)
+model.load_parameters('parameters')
+write_alignments(model, 'ibm1.vb.naacl')
+
+model = Model2(data, None, 'uniform')
+model.load_parameters('parameters')
+write_alignments(model, 'ibm2-uniform.mle.naacl')
+
+model = Model2(data, None, 'random')
+model.load_parameters('parameters')
+write_alignments(model, 'ibm2-random.mle.naacl')
+
+model = Model2(data, None, 'ibm1')
+model.load_parameters('parameters')
+write_alignments(model, 'ibm2-ibm1.mle.naacl')
 
 model = BayesianModel2(data, None, 0.1)
 model.load_parameters('parameters')
 write_alignments(model, 'ibm2.vb.naacl')
 
-# model = JumpingModel2(data, None, 'random')
-# model.load_parameters('parameters')
-# write_alignments(model, 'ibm2-jumps.mle.naacl')
+model = JumpingModel2(data, None, 'random')
+model.load_parameters('parameters')
+write_alignments(model, 'ibm2-jumps.mle.naacl')
 
 testing_gold_alignment_pickle = 'pickles/testing_gold_alignments.pickle'
 with open(testing_gold_alignment_pickle, 'rb') as file:
