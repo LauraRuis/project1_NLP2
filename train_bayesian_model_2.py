@@ -40,7 +40,7 @@ else:
         pickle.dump(data, file)
 
 # initialize model and load saved parameters
-epochs = 2
+epochs = 10
 
 model = BayesianModel2(data, validation_gold_alignments, 0.1)
 
